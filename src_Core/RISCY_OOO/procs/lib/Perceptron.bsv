@@ -10,26 +10,34 @@ export PerceptronEntries;
 export PerceptronIndex;
 
 // Local Perceptron Typedefs
-typedef 128 PerceptronEntries; // Entries per perceptron
-typedef Bit#(TLog#(PerceptronEntries)) PerceptronIndex; // Index for perceptron
+typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
+typedef Bit#(PerceptronEntries / 4) PerceptronIndex; // Number of perceptrons - depends on hash function
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    RegFile#(PerceptronIndex, Bit#(2)) history <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronEntries)-1));
-    RegFile#(PerceptronIndex, Bit#(2)) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronEntries)-1));
+    // history[0] is the global history (currently).
+    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Bit#(1))) history <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
+    // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
+    // TODO (RW): Change type of history to be FIFO.
+    // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
 
     function PerceptronIndex getIndex(Addr pc);
-        return truncate(pc >> 2);
+        return truncate(pc >> 2) + 1; // Add 1 because 0 is global history
     endfunction
 
     // Function to compute the perceptron output
-    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history);
-        Int#(16) sum = weight[0]; // Bias weight
-        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin
-            sum = sum + (history[i] ? weight[i] : -weight[i]);
+    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) hist);
+        // y : output
+        // w = weights[index] = weight
+        // x = history[index] = hist
+        // y = w[0] + sum(x[i] * w[i]) for i = 1 to n
+        Int#(16) sum = weight[0]; // Bias weight - TODO (RW): check this can't overflow.
+        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
+            sum = sum + (hist[i] ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
         end
         return sum >= 0;
     endfunction
@@ -56,21 +64,26 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
 
     
     method Action update(Bool taken, PerceptronTrainInfo train, Bool mispred); 
-    
-        let index = train;
+        // TODO (RW): Only train if below training threshold. Paper says threshold = 1.93 * branch history + 14.
+        
+        let index = train; // already hashed
+        let local_hist = history.sub(index);
+        let local_weights = weights.sub(index);
+        
+        // t = taken
+        // w_i = local_weights[i]
+        // x_i = local_hist[i]
+        // w_i = w_i + t * x_i
+        // w_i = t ? (w_i + x_i) : (w_i - x_i)
+        
         // Increment bias if taken, else decrement
-        let bias = history.sub(index)[0];
-        history.sub(index)[0] = (taken) ? bias + 1 : bias - 1;
+        local_weights[0] = (taken) ? local_weights[0] + 1 : local_weights[0] - 1;
 
-        // TODO (RW): Redefine for perceptron
-        let current_hist = history.sub(index);
-        Bit#(2) next_hist;
-        if(taken) begin
-            next_hist = (current_hist == 2'b11) ? 2'b11 : current_hist + 1;
-        end else begin
-            next_hist = (current_hist == 2'b00) ? 2'b00 : current_hist - 1;
+        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin
+            local_weights[i] = local_weights[i] + (taken == local_hist[i] ? 1 : -1);
         end
-        history.upd(index, next_hist); 
+
+        // TODO(RW): update histories (local + global) with new taken value (once structure decided).
     endmethod
 
 
