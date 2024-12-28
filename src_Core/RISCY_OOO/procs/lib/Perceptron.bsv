@@ -40,16 +40,16 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    // history[0] is the global history (currently).
     // RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Bit#(1))) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
-    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
+    PerceptronHistory global_history <- mkPerceptronHistory(PerceptronEntries);
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Change type of history to be FIFO.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
 
     function PerceptronIndex getIndex(Addr pc);
-        return truncate(pc >> 2) + 1; // Add 1 because 0 is global history
+        return truncate(pc >> 2);
     endfunction
 
     // Function to compute the perceptron output
@@ -106,10 +106,9 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             local_weights[i] = local_weights[i] + (taken == local_hist[i] ? 1 : -1);
         end
 
-        // Update the local history
+        // Update history
         local_hist.update(taken);
-
-        // TODO(RW): update global history
+        global_history.update(taken);
     endmethod
 
 
