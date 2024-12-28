@@ -15,11 +15,34 @@ typedef Bit#(PerceptronEntries / 4) PerceptronIndex; // Number of perceptrons - 
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
+interface PerceptronHistory#(type PerceptronEntries);
+    method Action update(Bool taken);
+    method Bool get(Int index);
+endinterface
+
+module mkPerceptronHistory(PerceptronHistory#(PerceptronEntries));
+    Vector#(PerceptronEntries, Bool) history;
+
+    // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
+
+    method Action update(Bool taken);
+        // shift all history values down one, add new value at the top.
+        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin
+            history[i] = history[i - 1];
+        end
+        history[0] = taken;
+    endmethod
+
+    method Bool get(Int index);
+        return history[index];
+    endmethod
+endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     // history[0] is the global history (currently).
-    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Bit#(1))) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    // RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Bit#(1))) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Change type of history to be FIFO.
@@ -37,7 +60,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // y = w[0] + sum(x[i] * w[i]) for i = 1 to n
         Int#(16) sum = weight[0]; // Bias weight - TODO (RW): check this can't overflow.
         for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
-            sum = sum + (history[i] ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
+            sum = sum + (history.get(i) ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
         end
         return sum >= 0;
     endfunction
@@ -48,7 +71,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         predIfc[i] = (interface DirPred;
             method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
                 let index = getIndex(offsetPc(pc_reg, i));
-                Bool taken = computePerceptronOutput(weights[i], histories[i]);
+                Bool taken = computePerceptronOutput(weights[i], histories.sub(i));
                 return DirPredResult {
                     taken: taken,
                     train: index
@@ -83,7 +106,10 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             local_weights[i] = local_weights[i] + (taken == local_hist[i] ? 1 : -1);
         end
 
-        // TODO(RW): update histories (local + global) with new taken value (once structure decided).
+        // Update the local history
+        local_hist.update(taken);
+
+        // TODO(RW): update global history
     endmethod
 
 
