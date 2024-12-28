@@ -40,27 +40,25 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    // RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Bit#(1))) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
     RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
     PerceptronHistory global_history <- mkPerceptronHistory(PerceptronEntries);
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
-    // TODO (RW): Change type of history to be FIFO.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
+    // TODO (RW): Allow size of global history to be different to that of each local history
+
 
     function PerceptronIndex getIndex(Addr pc);
         return truncate(pc >> 2);
     endfunction
 
     // Function to compute the perceptron output
-    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history);
-        // y : output
-        // w = weights[index] = weight
-        // x = histories[index] = history
-        // y = w[0] + sum(x[i] * w[i]) for i = 1 to n
+    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history, Vector#(PerceptronEntries, Bool) global_history);
         Int#(16) sum = weight[0]; // Bias weight - TODO (RW): check this can't overflow.
         for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
             sum = sum + (history.get(i) ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
+            // TODO (RW): Use global history too 
+            // sum = sum + (global_history.get(i) ? glob_weight[i] : -glob_weight[i]);
         end
         return sum >= 0;
     endfunction
@@ -70,8 +68,9 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     for(Integer i = 0; i < valueof(SupSize); i = i+1) begin
         predIfc[i] = (interface DirPred;
             method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
+                // TODO (RW): Pass global weights through
                 let index = getIndex(offsetPc(pc_reg, i));
-                Bool taken = computePerceptronOutput(weights[i], histories.sub(i));
+                Bool taken = computePerceptronOutput(weights[i], histories.sub(i), global_history);
                 return DirPredResult {
                     taken: taken,
                     train: index
@@ -92,12 +91,6 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         let index = train; // already hashed
         let local_hist = histories.sub(index);
         let local_weights = weights.sub(index);
-        
-        // t = taken
-        // w_i = local_weights[i]
-        // x_i = local_hist[i]
-        // w_i = w_i + t * x_i
-        // w_i = t ? (w_i + x_i) : (w_i - x_i)
         
         // Increment bias if taken, else decrement
         local_weights[0] = (taken) ? local_weights[0] + 1 : local_weights[0] - 1;
