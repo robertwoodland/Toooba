@@ -106,7 +106,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         
         let index = train; // already hashed
         let local_hist = histories.sub(index);
-        let local_weights = weights.sub(index);
+        Vector#(PerceptronEntries, Int#(8)) local_weights = weights.sub(index);
         
         // Increment bias if taken, else decrement
         local_weights[0] = (taken) ? local_weights[0] + 1 : local_weights[0] - 1;
