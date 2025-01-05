@@ -46,9 +46,10 @@
 
 `define LOG_BOOT_ROM_BYTES 12 // 4KB boot rom
 
-// tournament predictor, other options are: BHT, TOUR, GSELECT, GSHARE. NOTE
+// tournament predictor, other options are: BHT, TOUR, GSELECT, GSHARE, PERCEPTRON. NOTE
 // that the predictors are of different size.
-`define DIR_PRED_TOUR
+// `define DIR_PRED_TOUR
+`define DIR_PRED_PERCEPTRON
 
 `define LOG_DEADLOCK_CYCLES 26 // 64M cycles for deadlock detection
 

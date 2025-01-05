@@ -33,6 +33,7 @@ import GSelectPred::*;
 import GSharePred::*;
 import TourPred::*;
 import TourPredSecure::*;
+import Perceptron::*;
 
 export DirPredTrainInfo(..);
 export mkDirPredictor;
@@ -48,6 +49,9 @@ typedef GShareTrainInfo DirPredTrainInfo;
 `endif
 `ifdef DIR_PRED_TOUR
 typedef TourTrainInfo DirPredTrainInfo;
+`endif
+`ifdef DIR_PRED_PERCEPTRON
+typedef PerceptronTrainInfo DirPredTrainInfo;
 `endif
 
 (* synthesize *)
@@ -79,6 +83,13 @@ module mkDirPredictor(DirPredictor#(DirPredTrainInfo));
 `else
     let m <- mkTourPred;
 `endif
+`endif
+
+`ifdef DIR_PRED_PERCEPTRON
+`ifdef SECURITY
+    staticAssert(False, "Perceptron with flush methods is not implemented");
+`endif
+    let m <- mkPerceptron;
 `endif
 
     return m;
