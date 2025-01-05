@@ -23,14 +23,17 @@ endinterface
 module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
     Vector#(PerceptronEntries, Bool) history;
 
+    // Make history a vector of 0s
+    history = replicate(False);
+
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
 
     method Action update(Bool taken);
         // shift all history values down one, add new value at the top.
         for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
-            history[i] = history[i - 1];
+            history[i] <= history[i - 1];
         end
-        history[0] = taken;
+        history[0] <= taken;
     endmethod
 
     method Bool get(Int index);
