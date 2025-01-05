@@ -11,16 +11,16 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef Bit#(PerceptronEntries / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. Valueof(). Or tdiv / tadd / tsub.
+typedef Bit#(valueof(PerceptronEntries) / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. Valueof(). Or tdiv / tadd / tsub.
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
-interface PerceptronHistory#(numeric type PerceptronEntries); // TODO (RW): Don't need to parameterise interface based on size.
+interface PerceptronHistory;
     method Action update(Bool taken);
     method Bool get(Int index); // TODO (RW): Instead of int, want something valueof(perceptronindex). What will it do if you call with too big a value?
 endinterface
 
-module mkPerceptronHistory(PerceptronHistory#(PerceptronEntries)); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
+module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
     Vector#(PerceptronEntries, Bool) history;
 
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
@@ -41,7 +41,7 @@ endmodule
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
-    PerceptronHistory global_history <- mkPerceptronHistory(PerceptronEntries);
+    PerceptronHistory global_history <- mkPerceptronHistory;
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
