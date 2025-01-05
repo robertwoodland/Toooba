@@ -11,7 +11,7 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef Bit#(valueOf(PerceptronEntries) / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. valueOf(). Or tdiv / tadd / tsub.
+typedef Bit#(TLog#(PerceptronEntries)) PerceptronIndex; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
