@@ -11,7 +11,7 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef Bit#(valueof(PerceptronEntries) / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. Valueof(). Or tdiv / tadd / tsub.
+typedef Bit#(valueOf(PerceptronEntries) / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. valueOf(). Or tdiv / tadd / tsub.
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
@@ -27,7 +27,7 @@ module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPe
 
     method Action update(Bool taken);
         // shift all history values down one, add new value at the top.
-        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin
+        for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
             history[i] = history[i - 1];
         end
         history[0] = taken;
@@ -56,7 +56,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     // Function to compute the perceptron output
     function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history, Vector#(PerceptronEntries, Int#(8)) glob_weight, Vector#(PerceptronEntries, Bool) global_history);
         Int#(16) sum = weight[0]; // Bias weight - TODO (RW): check this can't overflow.
-        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
+        for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
             sum = sum + (history.get(i) ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
             // TODO (RW): Use global history too 
             sum = sum + (global_history.get(i) ? glob_weight[i] : -glob_weight[i]);
@@ -66,7 +66,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
 
     // Interface for each perceptron in the table
     Vector#(SupSize, DirPred#(PerceptronTrainInfo)) predIfc;
-    for(Integer i = 0; i < valueof(SupSize); i = i+1) begin
+    for(Integer i = 0; i < valueOf(SupSize); i = i+1) begin
         predIfc[i] = (interface DirPred;
             method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
                 // TODO (RW): Pass global weights through
@@ -96,7 +96,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // Increment bias if taken, else decrement
         local_weights[0] = (taken) ? local_weights[0] + 1 : local_weights[0] - 1;
 
-        for (Integer i = 1; i < valueof(PerceptronEntries); i = i + 1) begin
+        for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
             local_weights[i] = local_weights[i] + (taken == local_hist[i] ? 1 : -1);
         end
 
