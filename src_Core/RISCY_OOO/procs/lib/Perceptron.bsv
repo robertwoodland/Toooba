@@ -11,16 +11,16 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef Bit#(PerceptronEntries / 4) PerceptronIndex; // Number of perceptrons - depends on hash function
+typedef Bit#(PerceptronEntries / 4) PerceptronIndex; // Number of perceptrons - depends on hash function. This should be a log?! Can't just divide PerceptronEntries as it's a type. Valueof(). Or tdiv / tadd / tsub.
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
-interface PerceptronHistory#(type PerceptronEntries);
+interface PerceptronHistory#(numeric type PerceptronEntries); // TODO (RW): Don't need to parameterise interface based on size.
     method Action update(Bool taken);
-    method Bool get(Int index);
+    method Bool get(Int index); // TODO (RW): Instead of int, want something valueof(perceptronindex). What will it do if you call with too big a value?
 endinterface
 
-module mkPerceptronHistory(PerceptronHistory#(PerceptronEntries));
+module mkPerceptronHistory(PerceptronHistory#(PerceptronEntries)); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
     Vector#(PerceptronEntries, Bool) history;
 
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
