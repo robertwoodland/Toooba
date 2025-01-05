@@ -51,6 +51,18 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
 
+    // resetHist
+    rule initHistory(resetHist);
+        for (Integer i = 0; i < valueOf(PerceptronIndex); i = i + 1) begin
+            histories.upd(i, mkPerceptronHistory);
+            weights.upd(i, replicate(0));
+            global_weights.upd(i, replicate(0));
+        end
+        global_history.update(False);
+
+        // TODO (RW): Should this be done in a separate rule?
+        
+    endrule
 
     function PerceptronIndex getIndex(Addr pc);
         return truncate(pc >> 2);
