@@ -69,12 +69,12 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     endfunction
 
     // Function to compute the perceptron output
-    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history, Vector#(PerceptronEntries, Int#(8)) glob_weight, Vector#(PerceptronEntries, Bool) global_history);
+    function Bool computePerceptronOutput(Vector#(PerceptronEntries, Int#(8)) weight, Vector#(PerceptronEntries, Bool) history, Vector#(PerceptronEntries, Int#(8)) glob_weight, Vector#(PerceptronEntries, Bool) global_hist);
         Int#(16) sum = weight[0]; // Bias weight - TODO (RW): check this can't overflow.
         for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
             sum = sum + (history.get(i) ? weight[i] : -weight[i]); // Think about hardware this implies. - log (128) = 9 deep?
             // TODO (RW): Use global history too 
-            sum = sum + (global_history.get(i) ? glob_weight[i] : -glob_weight[i]);
+            sum = sum + (global_hist.get(i) ? glob_weight[i] : -glob_weight[i]);
         end
         return sum >= 0;
     endfunction
