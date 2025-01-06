@@ -11,9 +11,9 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef Bit#(TLog#(PerceptronEntries)) PerceptronIndex; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
+typedef TLog#(PerceptronEntries) PerceptronIndex; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
 
-typedef PerceptronIndex PerceptronTrainInfo;
+typedef Bit#(PerceptronIndex) PerceptronTrainInfo;
 
 interface PerceptronHistory;
     method Action update(Bool taken);
@@ -43,10 +43,10 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
-    PerceptronHistory global_history <- mkPerceptronHistory;
-    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
-    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
+    RegFile#(Bit#(PerceptronIndex), PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
+    Reg#(PerceptronHistory) global_history <- mkPerceptronHistory;
+    RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
+    RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
@@ -64,7 +64,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         
     endrule
 
-    function PerceptronIndex getIndex(Addr pc);
+    function Bit#(PerceptronIndex) getIndex(Addr pc);
         return truncate(pc >> 2);
     endfunction
 
