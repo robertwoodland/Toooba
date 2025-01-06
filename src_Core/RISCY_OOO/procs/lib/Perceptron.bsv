@@ -16,8 +16,8 @@ typedef TLog#(PerceptronEntries) PerceptronIndex; // Number of perceptrons - dep
 typedef Bit#(PerceptronIndex) PerceptronTrainInfo;
 
 interface PerceptronHistory;
-    method Action update(Bool taken);
-    method Bool get(Int index); // TODO (RW): Instead of int, want something valueof(perceptronindex). What will it do if you call with too big a value?
+    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Did this need to be an ActionValue, or is there some way of updating the RegFile from within the method?
+    method Bool get(Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
 endinterface
 
 module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
@@ -28,15 +28,17 @@ module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPe
 
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
 
-    method Action update(Bool taken);
+    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken);
+        Vector#(PerceptronEntries, Bool) local_hist = history;
         // shift all history values down one, add new value at the top.
         for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
-            history[i] <= history[i - 1];
+            local_hist[i] = local_hist[i - 1];
         end
-        history[0] <= taken;
+        local_hist[0] = taken;
+        return local_hist; // TODO (RW): Because can't seem to update history in place?
     endmethod
 
-    method Bool get(Int index);
+    method Bool get(Integer index);
         return history[index];
     endmethod
 endmodule
@@ -58,7 +60,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
         end
-        global_history.update(False);
+        global_history <= global_history.update(False);
 
         // TODO (RW): Should this be done in a separate rule?
         
@@ -116,8 +118,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         end
 
         // Update history
-        local_hist.update(taken);
-        global_history.update(taken);
+        local_hist = local_hist.update(taken);
+        global_history <= global_history.update(taken);
     endmethod
 
 
