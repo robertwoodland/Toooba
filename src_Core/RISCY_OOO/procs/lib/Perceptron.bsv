@@ -52,14 +52,27 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
-
-    // resetHist
+    
+    Reg#(Bit#(PerceptronIndex)) i <- mkReg(0);
+    Reg#(Bool) resetHist <- mkReg(True);
+    
     rule initHistory(resetHist);
-        for (Integer i = 0; i < valueOf(PerceptronIndex); i = i + 1) begin
+        if (i == 0) begin
             histories.upd(i, mkPerceptronHistoryShiftReg);
             weights.upd(i, replicate(0));
             global_history <= mkPerceptronHistoryShiftReg;
             global_weights.upd(i, replicate(0));
+            i <= i + 1;
+        end
+        else if (i < valueOf(PerceptronIndex)) begin
+            histories.upd(i, mkPerceptronHistoryShiftReg);
+            weights.upd(i, replicate(0));
+            global_weights.upd(i, replicate(0));
+            i <= i + 1;
+        end
+        else begin
+            i <= 0;
+            resetHist <= False;
         end
 
         // TODO (RW): Should this be done in a separate rule?
