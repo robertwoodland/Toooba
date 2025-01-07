@@ -56,15 +56,17 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     // resetHist
     rule initHistory(resetHist);
         for (Integer i = 0; i < valueOf(PerceptronIndex); i = i + 1) begin
-            histories.upd(i, mkPerceptronHistory);
+            histories.upd(i, mkPerceptronHistoryShiftReg);
             weights.upd(i, replicate(0));
+            global_history <= mkPerceptronHistoryShiftReg;
             global_weights.upd(i, replicate(0));
         end
-        global_history <= global_history.update(False);
 
         // TODO (RW): Should this be done in a separate rule?
         // TODO (RW): Make i be state, and have rule just reset histories[i]. Need to clear resetHist afterwards.
         
+        histories.upd(i, mkPerceptronHistoryShiftReg);
+        weights.upd(i, replicate(0));
     endrule
 
     function Bit#(PerceptronIndex) getIndex(Addr pc);
