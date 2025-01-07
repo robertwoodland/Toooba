@@ -20,10 +20,10 @@ interface PerceptronHistory;
     method Bool get(Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
 endinterface
 
-module mkPerceptronHistory(PerceptronHistory); // TODO (RW): Rename this to mkPerceptronHistoryShiftReg.
-    Vector#(PerceptronEntries, Bool) history;
+module mkPerceptronHistoryShiftReg(PerceptronHistory);
+    Vector#(PerceptronEntries, Bool) history; // TODO (RW): Should this be a Reg so as to enable updates?
 
-    // Make history a vector of 0s
+    // Make history a vector of falses
     history = replicate(False);
 
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
@@ -45,8 +45,8 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    RegFile#(Bit#(PerceptronIndex), PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); // TODO (RW): Instantiate with mkPerceptronHistory somehow
-    Reg#(PerceptronHistory) global_history <- mkPerceptronHistory;
+    RegFile#(Bit#(PerceptronIndex), PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    Reg#(PerceptronHistory) global_history <- mkReg(mkPerceptronHistoryShiftReg);
     RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
@@ -63,6 +63,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         global_history <= global_history.update(False);
 
         // TODO (RW): Should this be done in a separate rule?
+        // TODO (RW): Make i be state, and have rule just reset histories[i]. Need to clear resetHist afterwards.
         
     endrule
 
