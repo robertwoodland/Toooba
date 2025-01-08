@@ -11,9 +11,10 @@ export PerceptronIndex;
 
 // Local Perceptron Typedefs
 typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef TLog#(PerceptronEntries) PerceptronIndex; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
+typedef TLog#(PerceptronEntries) PerceptronIndexWidth; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
+typedef Bit#(PerceptronIndexWidth) PerceptronIndex;
 
-typedef Bit#(PerceptronIndex) PerceptronTrainInfo;
+typedef PerceptronIndex PerceptronTrainInfo;
 
 interface PerceptronHistory;
     method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Did this need to be an ActionValue, or is there some way of updating the RegFile from within the method?
@@ -45,15 +46,15 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    RegFile#(Bit#(PerceptronIndex), PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1));
+    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1));
     Reg#(PerceptronHistory) global_history <- mkReg(mkPerceptronHistoryShiftReg);
-    RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
-    RegFile#(Bit#(PerceptronIndex), Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndex)-1)); 
+    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
+    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
     
-    Reg#(Bit#(PerceptronIndex)) i <- mkReg(0);
+    Reg#(PerceptronIndex) i <- mkReg(0);
     Reg#(Bool) resetHist <- mkReg(True);
     
     rule initHistory(resetHist);
@@ -64,7 +65,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             global_weights.upd(i, replicate(0));
             i <= i + 1;
         end
-        else if (i < valueOf(PerceptronIndex)) begin
+        else if (i < valueOf(PerceptronIndexWidth)) begin
             histories.upd(i, mkPerceptronHistoryShiftReg);
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
@@ -82,7 +83,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         weights.upd(i, replicate(0));
     endrule
 
-    function Bit#(PerceptronIndex) getIndex(Addr pc);
+    function PerceptronIndex getIndex(Addr pc);
         return truncate(pc >> 2);
     endfunction
 
