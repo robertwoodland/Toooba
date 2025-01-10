@@ -44,6 +44,31 @@ module mkPerceptronHistoryShiftReg(PerceptronHistory);
     endmethod
 endmodule
 
+instance Bits#(PerceptronHistory, PerceptronEntries);
+    function Bit#(PerceptronEntries) pack(PerceptronHistory x);
+        Bit#(PerceptronEntries) history;
+        
+        for (Integer i = 0; i < valueOf(PerceptronEntries); i = i + 1) begin
+            history = history << 1;
+            history = history | (x.get(i) ? 1 : 0);
+        end
+        return history;
+    endfunction
+
+    // Fails due to expected return of update to be PerceptronHistory, but is actually ActionValue#(Vector#(...)).
+    function PerceptronHistory unpack(Bit#(PerceptronEntries) x);
+        Reg#(PerceptronHistory) history;
+        Bool y;
+
+        for (Integer i = 0; i < valueOf(PerceptronEntries); i = i + 1) begin
+            y = (x[i] == 1);
+            history = history.update(y);
+        end
+        
+        return history;
+    endfunction
+endinstance
+
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1));
