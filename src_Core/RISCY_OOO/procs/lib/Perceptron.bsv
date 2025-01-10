@@ -22,7 +22,7 @@ interface PerceptronHistory;
 endinterface
 
 module mkPerceptronHistoryShiftReg(PerceptronHistory);
-    Vector#(PerceptronEntries, Bool) history; // TODO (RW): Should this be a Reg so as to enable updates?
+    Vector#(PerceptronEntries, Bool) history; // This can't be a Reg as it wouldn't be able to be put in RegFile
 
     // Make history a vector of falses
     history = replicate(False);
@@ -47,7 +47,7 @@ endmodule
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1));
-    Reg#(PerceptronHistory) global_history <- mkReg(mkPerceptronHistoryShiftReg);
+    Reg#(PerceptronHistory) global_history <- mkRegU;
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
@@ -65,7 +65,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             global_weights.upd(i, replicate(0));
             i <= i + 1;
         end
-        else if (i < valueOf(PerceptronIndexWidth)) begin
+        else if (i < valueOf(PerceptronIndexWidth)) begin // Should be PerceptronEntries, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
             histories.upd(i, mkPerceptronHistoryShiftReg);
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
@@ -79,6 +79,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // TODO (RW): Should this be done in a separate rule?
         // TODO (RW): Make i be state, and have rule just reset histories[i]. Need to clear resetHist afterwards.
         
+        // May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
+
         histories.upd(i, mkPerceptronHistoryShiftReg);
         weights.upd(i, replicate(0));
     endrule
