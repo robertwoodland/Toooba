@@ -19,6 +19,8 @@ typedef PerceptronIndex PerceptronTrainInfo;
 interface PerceptronHistory;
     method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Try making this return a PerceptronHistory instead of a Vector? Also doesn't need to be ActionValue.
     method Bool get(Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
+    method Bit#(PerceptronEntries) toBits;
+    method PerceptronHistory fromBits(Bit#(PerceptronEntries) x); // TODO (RW): Could also try to have this not return anything and be an Action?
 endinterface
 
 module mkPerceptronHistoryShiftReg(PerceptronHistory);
@@ -42,30 +44,23 @@ module mkPerceptronHistoryShiftReg(PerceptronHistory);
     method Bool get(Integer index);
         return history[index];
     endmethod
+
+    method Bit#(PerceptronEntries) toBits;
+        return pack(history);
+    endmethod
+
+    method PerceptronHistory fromBits(Bit#(PerceptronEntries) x);
+        return unpack(x); // Not sure if this really works, but that doesn't matter just yet
+    endmethod
 endmodule
 
 instance Bits#(PerceptronHistory, PerceptronEntries);
     function Bit#(PerceptronEntries) pack(PerceptronHistory x);
-        Bit#(PerceptronEntries) history;
-        
-        for (Integer i = 0; i < valueOf(PerceptronEntries); i = i + 1) begin
-            history = history << 1;
-            history = history | (x.get(i) ? 1 : 0);
-        end
-        return history;
+        return x.toBits;
     endfunction
 
-    // Fails due to expected return of update to be PerceptronHistory, but is actually ActionValue#(Vector#(...)).
     function PerceptronHistory unpack(Bit#(PerceptronEntries) x);
-        Reg#(PerceptronHistory) history;
-        Bool y;
-
-        for (Integer i = 0; i < valueOf(PerceptronEntries); i = i + 1) begin
-            y = (x[i] == 1);
-            history = history.update(y);
-        end
-        
-        return history;
+        return PerceptronHistory.fromBits(x);
     endfunction
 endinstance
 
