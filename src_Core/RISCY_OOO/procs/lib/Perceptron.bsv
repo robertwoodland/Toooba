@@ -17,7 +17,7 @@ typedef Bit#(PerceptronIndexWidth) PerceptronIndex;
 typedef PerceptronIndex PerceptronTrainInfo;
 
 interface PerceptronHistory;
-    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Did this need to be an ActionValue, or is there some way of updating the RegFile from within the method?
+    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Try making this return a PerceptronHistory instead of a Vector? Also doesn't need to be ActionValue.
     method Bool get(Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
 endinterface
 
@@ -36,7 +36,7 @@ module mkPerceptronHistoryShiftReg(PerceptronHistory);
             local_hist[i] = local_hist[i - 1];
         end
         local_hist[0] = taken;
-        return local_hist; // TODO (RW): Because can't seem to update history in place?
+        return local_hist; // Can't update history in place as it can't be a reg.
     endmethod
 
     method Bool get(Integer index);
