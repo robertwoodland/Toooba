@@ -68,7 +68,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             global_weights.upd(i, replicate(0));
             i <= i + 1;
         end
-        else if (i < valueOf(PerceptronIndexWidth)) begin // Should be PerceptronEntries, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
+        else if (i < fromInteger(valueOf(PerceptronEntries))) begin // Should be PerceptronEntries, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
             histories.upd(i, ph.initHist());
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
