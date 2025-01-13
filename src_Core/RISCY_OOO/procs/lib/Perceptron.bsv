@@ -16,56 +16,39 @@ typedef Bit#(PerceptronIndexWidth) PerceptronIndex;
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
-interface PerceptronHistory;
-    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken); // TODO (RW): Try making this return a PerceptronHistory instead of a Vector? Also doesn't need to be ActionValue.
-    method Bool get(Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
-    method Bit#(PerceptronEntries) toBits;
-    method PerceptronHistory fromBits(Bit#(PerceptronEntries) x); // TODO (RW): Could also try to have this not return anything and be an Action?
+typedef Vector#(PerceptronEntries, Bool) PerceptronHistory; // Don't need deriving(Bits); as Vector already does?
+
+interface PerceptronHistorian; // Not stateful
+    method PerceptronHistory update(PerceptronHistory hist, Bool taken); // TODO (RW): Try making this return a PerceptronHistory instead of a Vector? Also doesn't need to be ActionValue.
+    method Bool get(PerceptronHistory hist, Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
+    method PerceptronHistory initHist();
 endinterface
 
-module mkPerceptronHistoryShiftReg(PerceptronHistory);
-    Vector#(PerceptronEntries, Bool) history; // This can't be a Reg as it wouldn't be able to be put in RegFile
-
-    // Make history a vector of falses
-    history = replicate(False);
-
+module mkPerceptronHistorianShiftReg(PerceptronHistorian);
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
 
-    method ActionValue#(Vector#(PerceptronEntries, Bool)) update(Bool taken);
-        Vector#(PerceptronEntries, Bool) local_hist = history;
+    method PerceptronHistory update(PerceptronHistory hist, Bool taken);
         // shift all history values down one, add new value at the top.
         for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
-            local_hist[i] = local_hist[i - 1];
+            hist[i] = hist[i - 1];
         end
-        local_hist[0] = taken;
-        return local_hist; // Can't update history in place as it can't be a reg.
+        hist[0] = taken;
+        return hist; // Can't update history in place as it can't be a reg.
     endmethod
 
-    method Bool get(Integer index);
-        return history[index];
+    method Bool get(PerceptronHistory hist, Integer index);
+        return hist[index];
     endmethod
 
-    method Bit#(PerceptronEntries) toBits;
-        return pack(history);
-    endmethod
-
-    method PerceptronHistory fromBits(Bit#(PerceptronEntries) x);
-        return unpack(x); // Not sure if this really works, but that doesn't matter just yet
+    method PerceptronHistory initHist;
+        PerceptronHistory hist = replicate(False);
+        return hist;
     endmethod
 endmodule
 
-instance Bits#(PerceptronHistory, PerceptronEntries);
-    function Bit#(PerceptronEntries) pack(PerceptronHistory x);
-        return x.toBits;
-    endfunction
-
-    function PerceptronHistory unpack(Bit#(PerceptronEntries) x);
-        return PerceptronHistory.fromBits(x);
-    endfunction
-endinstance
-
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
+    PerceptronHistorian ph <- mkPerceptronHistorianShiftReg;
     RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1));
     Reg#(PerceptronHistory) global_history <- mkRegU;
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
@@ -79,14 +62,14 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     
     rule initHistory(resetHist);
         if (i == 0) begin
-            histories.upd(i, mkPerceptronHistoryShiftReg);
+            histories.upd(i, ph.initHist());
             weights.upd(i, replicate(0));
-            global_history <= mkPerceptronHistoryShiftReg;
+            global_history <= ph.initHist();
             global_weights.upd(i, replicate(0));
             i <= i + 1;
         end
         else if (i < valueOf(PerceptronIndexWidth)) begin // Should be PerceptronEntries, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
-            histories.upd(i, mkPerceptronHistoryShiftReg);
+            histories.upd(i, ph.initHist());
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
             i <= i + 1;
@@ -100,9 +83,6 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // TODO (RW): Make i be state, and have rule just reset histories[i]. Need to clear resetHist afterwards.
         
         // May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
-
-        histories.upd(i, mkPerceptronHistoryShiftReg);
-        weights.upd(i, replicate(0));
     endrule
 
     function PerceptronIndex getIndex(Addr pc);
