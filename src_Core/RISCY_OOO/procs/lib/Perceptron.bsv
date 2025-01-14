@@ -8,6 +8,7 @@ export PerceptronTrainInfo;
 export mkPerceptron;
 export PerceptronEntries;
 export PerceptronIndex;
+export PerceptronIndexWidth;
 
 // Local Perceptron Typedefs
 typedef 64 PerceptronEntries; // Numeric: Size of perceptron (length of history and weights) - typically 4 to 66 depending on hardware budget.
@@ -69,7 +70,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             global_weights.upd(i, replicate(0));
             i <= i + 1;
         end
-        else if (i < fromInteger(valueOf(PerceptronEntries))) begin // Should be PerceptronEntries, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
+        else if (i < fromInteger(valueOf(PerceptronIndexWidth))) begin // Should be PerceptronCount, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
             histories.upd(i, ph.initHist());
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
@@ -86,7 +87,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
     endrule
 
-    function PerceptronIndex getIndex(Addr pc);
+    function PerceptronIndex getIndex(Addr pc); // TODO (RW): Use correct return type for this. Should be using Bit#(smth), not Integer.
         return truncate(pc >> 2);
     endfunction
 
