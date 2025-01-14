@@ -10,17 +10,17 @@ export PerceptronEntries;
 export PerceptronIndex;
 
 // Local Perceptron Typedefs
-typedef 128 PerceptronEntries; // Size of perceptron (length of history) - typically 4 to 66 depending on hardware budget.
-typedef TLog#(PerceptronEntries) PerceptronIndexWidth; // Number of perceptrons - depends on hash function. TODO (RW): Clarify why this should be a log?
-typedef Bit#(PerceptronIndexWidth) PerceptronIndex;
+typedef 64 PerceptronEntries; // Numeric: Size of perceptron (length of history and weights) - typically 4 to 66 depending on hardware budget.
+typedef TLog#(PerceptronEntries) PerceptronIndexWidth; // Numeric: Number of bits to be used for indexing history and weights.
+typedef Bit#(PerceptronIndexWidth) PerceptronIndex; // Value: Bits used as the index for history and weights.
 
 typedef PerceptronIndex PerceptronTrainInfo;
 
 typedef Vector#(PerceptronEntries, Bool) PerceptronHistory; // Don't need deriving(Bits); as Vector already does?
 
 interface PerceptronHistorian; // Not stateful
-    method PerceptronHistory update(PerceptronHistory hist, Bool taken); // TODO (RW): Try making this return a PerceptronHistory instead of a Vector? Also doesn't need to be ActionValue.
-    method Bool get(PerceptronHistory hist, Integer index); // TODO (RW): Instead of Integer, want something valueof(perceptronindex). What will it do if you call with too big a value?
+    method PerceptronHistory update(PerceptronHistory hist, Bool taken);
+    method Bool get(PerceptronHistory hist, Integer index); // TODO (RW): Instead of Integer, want PerceptronIndex. What will it do if you call with too big a value?
     method PerceptronHistory initHist();
 endinterface
 
