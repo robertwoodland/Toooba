@@ -138,8 +138,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         end
 
         // Update history
-        local_hist = local_hist.update(taken);
-        global_history <= global_history.update(taken);
+        local_hist = ph.update(local_hist, taken);
+        global_history <= ph.update(global_history, taken);
     endmethod
 
 
