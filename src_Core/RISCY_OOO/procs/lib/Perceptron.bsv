@@ -53,6 +53,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     Reg#(PerceptronHistory) global_history <- mkRegU;
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
     RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
+    Reg#(Addr) pc_reg <- mkRegU;
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
@@ -107,7 +108,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
                 // TODO (RW): Pass global weights through
                 let index = getIndex(offsetPc(pc_reg, i));
-                Bool taken = computePerceptronOutput(weights[i], histories.sub(i), global_weights[i], global_history);
+                Bool taken = computePerceptronOutput(weights.sub(index), histories.sub(index), global_weights.sub(index), global_history);
                 return DirPredResult {
                     taken: taken,
                     train: index
