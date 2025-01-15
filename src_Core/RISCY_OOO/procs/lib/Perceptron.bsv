@@ -9,13 +9,24 @@ export mkPerceptron;
 export PerceptronEntries;
 export PerceptronIndex;
 export PerceptronIndexWidth;
+export PerceptronCount;
+export PerceptronsRegIndex;
+export PerceptronsRegIndexWidth;
+export AddrRange;
+export AddrWidth;
 
 // Local Perceptron Typedefs
 typedef 64 PerceptronEntries; // Numeric: Size of perceptron (length of history and weights) - typically 4 to 66 depending on hardware budget.
 typedef TLog#(PerceptronEntries) PerceptronIndexWidth; // Numeric: Number of bits to be used for indexing history and weights.
 typedef Bit#(PerceptronIndexWidth) PerceptronIndex; // Value: Bits used as the index for history and weights.
 
-typedef PerceptronIndex PerceptronTrainInfo;
+typedef SizeOf#(Addr) AddrWidth; // Numeric: Number of bits in an address.
+typedef TExp#(AddrWidth) AddrRange; // Numeric: Number of addresses in the range.
+typedef TDiv#(AddrRange, 4) PerceptronCount; // Numeric: Number of perceptrons - depends on hash function.
+typedef TLog#(PerceptronCount) PerceptronsRegIndexWidth; // Numeric: Number of bits to be used for indexing the Regfile of perceptrons. TODO (RW): Increase by 1 to be big enough for weights!
+typedef Bit#(PerceptronsRegIndexWidth) PerceptronsRegIndex; // Value: Bits used as the index for the Regfile.
+ 
+typedef PerceptronsRegIndex PerceptronTrainInfo;
 
 typedef Vector#(PerceptronEntries, Bool) PerceptronHistory; // Don't need deriving(Bits); as Vector already does?
 
@@ -50,16 +61,18 @@ endmodule
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     PerceptronHistorian ph <- mkPerceptronHistorianShiftReg;
-    RegFile#(PerceptronIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1));
+    RegFile#(PerceptronsRegIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronsRegIndexWidth)-1));
     Reg#(PerceptronHistory) global_history <- mkRegU;
-    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
-    RegFile#(PerceptronIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronIndexWidth)-1)); 
+    RegFile#(PerceptronsRegIndex, Vector#(PerceptronEntries, Int#(8))) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronsRegIndexWidth)-1)); 
+    RegFile#(PerceptronsRegIndex, Vector#(PerceptronEntries, Int#(8))) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronsRegIndexWidth)-1)); 
+    
     Reg#(Addr) pc_reg <- mkRegU;
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
     
-    Reg#(PerceptronIndex) i <- mkReg(0);
+
+    Reg#(PerceptronsRegIndex) i <- mkReg(0);
     Reg#(Bool) resetHist <- mkReg(True);
     
     rule initHistory(resetHist);
@@ -87,7 +100,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
     endrule
 
-    function PerceptronIndex getIndex(Addr pc); // TODO (RW): Use correct return type for this. Should be using Bit#(smth), not Integer.
+    function PerceptronsRegIndex getIndex(Addr pc);
         return truncate(pc >> 2);
     endfunction
 
@@ -107,7 +120,6 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     for(Integer i = 0; i < valueOf(SupSize); i = i+1) begin
         predIfc[i] = (interface DirPred;
             method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
-                // TODO (RW): Pass global weights through
                 let index = getIndex(offsetPc(pc_reg, i));
                 Bool taken = computePerceptronOutput(weights.sub(index), histories.sub(index), global_weights.sub(index), global_history);
                 return DirPredResult {
