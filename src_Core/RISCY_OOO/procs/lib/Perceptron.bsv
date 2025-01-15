@@ -78,13 +78,9 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     
     rule initHistory(resetHist);
         if (i == 0) begin
-            histories.upd(i, ph.initHist());
-            weights.upd(i, replicate(0));
             global_history <= ph.initHist();
-            global_weights.upd(i, replicate(0));
-            i <= i + 1;
         end
-        else if (i < fromInteger(valueOf(PerceptronIndexWidth))) begin // Should be PerceptronCount, not PerceptronIndexWidth. Should check if ON THE LAST CASE, not past it.
+        if (i < fromInteger(valueOf(PerceptronCount) - 1)) begin
             histories.upd(i, ph.initHist());
             weights.upd(i, replicate(0));
             global_weights.upd(i, replicate(0));
