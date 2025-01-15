@@ -91,10 +91,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
             resetHist <= False;
         end
 
-        // TODO (RW): Should this be done in a separate rule?
-        // TODO (RW): Make i be state, and have rule just reset histories[i]. Need to clear resetHist afterwards.
-        
-        // May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
+        // TODO (RW): Should global be done in a separate rule?
+        // TODO (RW): May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
     endrule
 
     function PerceptronsRegIndex getIndex(Addr pc);
@@ -148,7 +146,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         end
 
         // Update history
-        local_hist = ph.update(local_hist, taken);
+        local_hist = ph.update(local_hist, taken); // TODO (RW): Write back somewhere! Use index in train
         global_history <= ph.update(global_history, taken);
     endmethod
 
