@@ -42,7 +42,7 @@ module mkPerceptronHistorianShift(PerceptronHistorian);
 
     method PerceptronHistory update(PerceptronHistory hist, Bool taken);
         // shift all history values down one, add new value at the top.
-        for (Integer i = 1; i < valueOf(PerceptronEntries); i = i + 1) begin
+        for (PerceptronIndex i = 1; i < fromInteger(valueOf(PerceptronEntries)); i = i + 1) begin
             hist[i] = hist[i - 1];
         end
         hist[0] = taken;
