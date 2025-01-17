@@ -79,18 +79,18 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         if (i == 0) begin
             global_history <= ph.initHist();
         end
-        if (i < fromInteger(valueOf(PerceptronCount) - 1)) begin
+        if (i <= fromInteger(valueOf(PerceptronCount) - 1)) begin
             histories.upd(i, ph.initHist());
-            weights.upd(i, replicate(0));
+            weights.upd(i, replicate(0)); // TODO (RW): Consider what happens at start when history is full of Falses.
             global_weights.upd(i, replicate(0));
-            i <= i + 1;
         end
-        else begin
-            i <= 0;
+        if (i == fromInteger(valueOf(PerceptronCount) - 1)) begin
             resetHist <= False;
         end
 
-        // TODO (RW): Should global be done in a separate rule?
+        i <= (i == fromInteger(valueOf(PerceptronCount) - 1)) ? 0 : i + 1;
+
+        // TODO (RW): Should global be done in a separate rule? - just initialise when made
         // TODO (RW): May need to guard things on not resetHist -> method stuff on history can only be done if not resetHist.
     endrule
 
