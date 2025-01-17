@@ -37,7 +37,7 @@ interface PerceptronHistorian; // Not stateful
     method PerceptronHistory initHist();
 endinterface
 
-module mkPerceptronHistorianShiftReg(PerceptronHistorian);
+module mkPerceptronHistorianShift(PerceptronHistorian);
     // TODO (RW): Could define another implementation which uses a head pointer and overwrites oldest value on update.
 
     method PerceptronHistory update(PerceptronHistory hist, Bool taken);
@@ -61,7 +61,7 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    PerceptronHistorian ph <- mkPerceptronHistorianShiftReg;
+    PerceptronHistorian ph <- mkPerceptronHistorianShift;
     RegFile#(PerceptronsRegIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1));
     Reg#(PerceptronHistory) global_history <- mkRegU;
     RegFile#(PerceptronsRegIndex, PerceptronWeights) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1)); 
