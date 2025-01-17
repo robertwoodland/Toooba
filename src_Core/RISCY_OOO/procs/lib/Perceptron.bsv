@@ -23,7 +23,7 @@ typedef Bit#(PerceptronIndexWidth) PerceptronIndex; // Value: Bits used as the i
 typedef SizeOf#(Addr) AddrWidth; // Numeric: Number of bits in an address.
 typedef TExp#(AddrWidth) AddrRange; // Numeric: Number of addresses in the range.
 typedef TDiv#(AddrRange, 4) PerceptronCount; // Numeric: Number of perceptrons - depends on hash function.
-typedef TLog#(PerceptronCount) PerceptronsRegIndexWidth; // Numeric: Number of bits to be used for indexing the Regfile of perceptrons. TODO (RW): Increase by 1 to be big enough for weights!
+typedef TLog#(PerceptronCount) PerceptronsRegIndexWidth; // Numeric: Number of bits to be used for indexing the Regfile of perceptrons.
 typedef Bit#(PerceptronsRegIndexWidth) PerceptronsRegIndex; // Value: Bits used as the index for the Regfile.
  
 typedef PerceptronsRegIndex PerceptronTrainInfo;
@@ -69,7 +69,6 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     
     Reg#(Addr) pc_reg <- mkRegU;
     // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
-    // TODO (RW): Use some additional local weights for global history? Could be second reg file, or could double size of weights reg file.
     // TODO (RW): Allow size of global history to be different to that of each local history
     
 
@@ -132,7 +131,7 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
 
     
     method Action update(Bool taken, PerceptronTrainInfo train, Bool mispred); 
-        // TODO (RW): Only train if below training threshold. Paper says threshold = 1.93 * branch history + 14.
+        // TODO (RW): Only train if below training threshold. Paper says threshold = 1.93 * branch history + 14. This could be a power optimisation. Test with and without, measure impact.
         
         let index = train; // already hashed
         let local_hist = histories.sub(index);
