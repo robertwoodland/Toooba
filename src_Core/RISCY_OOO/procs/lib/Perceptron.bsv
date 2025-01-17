@@ -33,7 +33,7 @@ typedef Vector#(TAdd#(PerceptronEntries, 1), Int#(8)) PerceptronWeights;
 
 interface PerceptronHistorian; // Not stateful
     method PerceptronHistory update(PerceptronHistory hist, Bool taken);
-    method Bool get(PerceptronHistory hist, Integer index); // TODO (RW): Instead of Integer, want PerceptronIndex. What will it do if you call with too big a value?
+    method Bool get(PerceptronHistory hist, PerceptronIndex index); // TODO (RW): What happens if you call with a value bigger than PerceptronEntries?
     method PerceptronHistory initHist();
 endinterface
 
@@ -49,7 +49,7 @@ module mkPerceptronHistorianShift(PerceptronHistorian);
         return hist; // Can't update history in place as it can't be a reg.
     endmethod
 
-    method Bool get(PerceptronHistory hist, Integer index);
+    method Bool get(PerceptronHistory hist, PerceptronIndex index);
         return hist[index];
     endmethod
 
