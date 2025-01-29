@@ -109,18 +109,24 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         return sum >= 0;
     endfunction
 
+    Reg#(Bool) takenReg <- mkRegU;
+
     // Interface for each perceptron in the table
     Vector#(SupSize, DirPred#(PerceptronTrainInfo)) predIfc;
     for(Integer i = 0; i < valueOf(SupSize); i = i+1) begin
         predIfc[i] = (interface DirPred;
-            method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred;
+            method ActionValue#(DirPredResult#(PerceptronTrainInfo)) pred = actionvalue
                 let index = getIndex(offsetPc(pc_reg, i));
                 Bool taken = computePerceptronOutput(weights.sub(index), histories.sub(index), global_weights.sub(index), global_history);
+                // TODO (RW): Need to know how to flush global_history on mispred? Check other predictors that use global (GSelect).
+                // PerceptronHistory hist = ph.update(global_history, taken);
+                // global_history <= hist;
+                takenReg <= taken;
                 return DirPredResult {
                     taken: taken,
                     train: index
                 };
-            endmethod
+            endactionvalue;
         endinterface);
     end
 
@@ -145,8 +151,10 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         end
 
         // Update history
-        local_hist = ph.update(local_hist, taken); // TODO (RW): Write back somewhere! Use index in train
-        global_history <= ph.update(global_history, taken);
+        // Problem because this may be done out of order?! May need to be able to flush global hist.
+        // GSelect passes 'current ghist' through with train type.
+        local_hist = ph.update(local_hist, taken);
+        histories.upd(train, local_hist);
     endmethod
 
 
