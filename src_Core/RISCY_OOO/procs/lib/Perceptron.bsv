@@ -74,13 +74,78 @@ module mkPerceptronHistorianShift(PerceptronHistorian);
     endmethod
 
     method PerceptronHistory initHist;
+        // TODO (RW): Should this instead be initialised to 10101010...? Prevents unfair initial training!
         PerceptronHistory hist = replicate(False);
         return hist;
     endmethod
 endmodule
 
+
+interface HashFunction;
+    method PerceptronsRegIndex getIndex(Addr pc);
+endinterface
+
+module mkTruncate(HashFunction);
+    method PerceptronsRegIndex getIndex(Addr pc);
+        return truncate(pc >> 1); // compressed instructions
+    endmethod
+endmodule
+
+module mkHybridMod(HashFunction);
+    method PerceptronsRegIndex getIndex(Addr pc);
+        PerceptronsRegIndex folded = 0;
+        UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) == 0) begin
+            folded = truncate(pc >> 1);
+        end else begin
+            // Break PC into chunks of size PerceptronsRegIndexWidth
+            for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+                PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+                folded = folded ^ chunk;       // XOR fold it in
+            end
+
+            // Try doing the expensive thing... MOD(valueOf(PerceptronCount))
+            Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) temp = zeroExtend(folded);
+            temp = temp % fromInteger(valueOf(PerceptronCount));
+        end
+
+        // Return the final index
+        return folded;
+    endmethod
+endmodule
+
+module mkHybridDrop(HashFunction);
+    method PerceptronsRegIndex getIndex(Addr pc);
+        PerceptronsRegIndex folded = 0;
+        UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) == 0) begin
+            folded = truncate(pc >> 1); 
+        end else begin
+            // Break PC into chunks of size PerceptronsRegIndexWidth
+            for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+                PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+                folded = folded ^ chunk;       // XOR fold it in
+            end
+
+            // If out of range, drop MSB
+            if (folded > fromInteger(valueOf(PerceptronCount) - 1)) begin
+                folded = (truncate(folded << 1) >> 1);
+            end
+        end
+
+        // Return the final index
+        return folded;
+    endmethod
+endmodule
+
+
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
+    HashFunction hash <- mkHybridDrop;
     PerceptronHistorian ph <- mkPerceptronHistorianShift;
     RegFile#(PerceptronsRegIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1));
     PerceptronGHistReg global_history <- mkGlobalBrHistReg;
@@ -116,8 +181,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         // TODO (RW): Should global (history) be done in a separate rule? - just initialise when made. Is it even done atm?
     endrule
 
-    function PerceptronsRegIndex getIndex(Addr pc); // TODO (RW): Try better hash functions?
-        return truncate(pc >> 1); // compressed instructions
+    function PerceptronsRegIndex getIndex(Addr pc);
+        return hash.getIndex(pc);
     endfunction
 
     // Function to compute the perceptron output
