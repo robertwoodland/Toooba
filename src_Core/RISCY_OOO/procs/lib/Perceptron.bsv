@@ -21,22 +21,19 @@ export AddrRange;
 export AddrWidth;
 
 // Local Perceptron Typedefs
-typedef 63 PerceptronEntries; // Numeric: Size of perceptron (length of history and weights) - typically 4 to 66 depending on hardware budget.
+typedef 14 PerceptronEntries; // Numeric: Size of perceptron (length of history and weights) - typically 4 to 66 depending on hardware budget.
 typedef TLog#(TAdd#(PerceptronEntries, 1)) PerceptronIndexWidth; // Numeric: Number of bits to be used for indexing history and weights. 1 is to ensure index big enough to deal with biases.
 typedef Bit#(PerceptronIndexWidth) PerceptronIndex; // Value: Bits used as the index for history and weights.
 typedef TAdd#(TMul#(PerceptronEntries, 2), 14) Threshold;
-typedef TLog#(Threshold) ThresholdWidth; // Numeric: Number of bits to be used for indexing the training count.
-typedef UInt#(ThresholdWidth) TrainCount; // Value: Bits used as the index for training count.
 
-// TODO (RW): Allow size of global history to be different to that of each local history
-typedef PerceptronEntries PerceptronGHistEntries; // Numeric: Size of global history
+typedef 71 PerceptronGHistEntries; // Numeric: Size of global history
 typedef Bit#(PerceptronGHistEntries) PerceptronGHist; // Value: Bits used as the global history.
 typedef GlobalBrHistReg#(PerceptronGHistEntries) PerceptronGHistReg; // Register: Global history register.
 
 typedef SizeOf#(Addr) AddrWidth; // Numeric: Number of bits in an address.
 typedef TExp#(AddrWidth) AddrRange; // Numeric: Number of addresses in the range.
 // typedef TDiv#(AddrRange, TExp#(40)) PerceptronCount; // Numeric: Number of perceptrons - depends on hash function. Made smaller as would take ages to initialise...
-typedef 16 PerceptronCount; // Numeric: Number of perceptrons - depends on hash function. Made smaller as would take ages to initialise...
+typedef 750 PerceptronCount; // Numeric: Number of perceptrons - depends on hash function. Made smaller as would take ages to initialise...
 // TODO (RW): Make this same size as BHT. Look at papers to see what is a reasonable size.
 typedef TLog#(PerceptronCount) PerceptronsRegIndexWidth; // Numeric: Number of bits to be used for indexing the Regfile of perceptrons.
 typedef Bit#(PerceptronsRegIndexWidth) PerceptronsRegIndex; // Value: Bits used as the index for the Regfile.
@@ -45,6 +42,7 @@ typedef Bit#(PerceptronsRegIndexWidth) PerceptronsRegIndex; // Value: Bits used 
 typedef struct {
     PerceptronGHist gHist;
     PerceptronsRegIndex index;
+    Bool train;
 } PerceptronTrainInfo deriving(Bits, Eq, FShow);
 
 typedef Vector#(PerceptronEntries, Bool) PerceptronHistory;
@@ -55,6 +53,8 @@ interface PerceptronHistorian; // Not stateful
     method PerceptronHistory update(PerceptronHistory hist, Bool taken);
     method Bool get(PerceptronHistory hist, PerceptronIndex index); // TODO (RW): What happens if you call with a value bigger than PerceptronEntries?
     method PerceptronHistory initHist();
+    // TODO (RW): Rename to reset?
+    // TODO (RW): Don't init local & global hist? 101010 may be fairer with an initial history of 000000. Saves time too.
 endinterface
 
 module mkPerceptronHistorianShift(PerceptronHistorian);
@@ -62,6 +62,7 @@ module mkPerceptronHistorianShift(PerceptronHistorian);
 
     method PerceptronHistory update(PerceptronHistory hist, Bool taken);
         // shift all history values down one, add new value at the top.
+        // TODO (RW): Try using rotate method here?
         for (PerceptronIndex i = fromInteger(valueOf(PerceptronEntries)) - 1; i > 0; i = i - 1) begin
             hist[i] = hist[i - 1];
         end
@@ -74,41 +75,98 @@ module mkPerceptronHistorianShift(PerceptronHistorian);
     endmethod
 
     method PerceptronHistory initHist;
-        // TODO (RW): Should this instead be initialised to 10101010...? Prevents unfair initial training!
         PerceptronHistory hist = replicate(False);
         return hist;
     endmethod
 endmodule
 
 
-interface HashFunction;
-    method PerceptronsRegIndex getIndex(Addr pc);
+interface HashFunction#(type perceptronsRegIndex);
+    method perceptronsRegIndex getIndex(Addr pc);
 endinterface
 
-module mkTruncate(HashFunction);
+module mkTruncate(HashFunction#(PerceptronsRegIndex));
     method PerceptronsRegIndex getIndex(Addr pc);
         return truncate(pc >> 1); // compressed instructions
     endmethod
 endmodule
 
-module mkHybridMod(HashFunction);
+module mkFold(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        PerceptronsRegIndex folded = 0;
+
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+            PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        return folded;
+    endmethod
+endmodule
+
+module mkMod(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        Addr modded = (pc % fromInteger(valueOf(PerceptronCount)));
+        return truncate(modded);
+    endmethod
+endmodule
+
+module mkFoldDrop(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        PerceptronsRegIndex folded = 0;
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+            PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        // If out of range, drop MSB
+        if (folded > fromInteger(valueOf(PerceptronCount) - 1)) begin
+            folded = (truncate(folded << 1) >> 1);
+        end
+        
+        // Return the final index
+        return folded;
+    endmethod
+endmodule
+
+module mkFoldMod(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        PerceptronsRegIndex folded = 0;
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+            PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) index = zeroExtend(folded);
+        index = index % fromInteger(valueOf(PerceptronCount));
+
+        // Return the final index
+        return truncate(index);
+    endmethod
+endmodule
+
+
+
+module mkHybridMod(HashFunction#(PerceptronsRegIndex));
     method PerceptronsRegIndex getIndex(Addr pc);
         PerceptronsRegIndex folded = 0;
         UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
 
-        // If a power of two, just truncate to size
-        if ((count & (count - 1)) == 0) begin
-            folded = truncate(pc >> 1);
-        end else begin
-            // Break PC into chunks of size PerceptronsRegIndexWidth
-            for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
-                PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
-                folded = folded ^ chunk;       // XOR fold it in
-            end
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+            PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
 
-            // Try doing the expensive thing... MOD(valueOf(PerceptronCount))
-            Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) temp = zeroExtend(folded);
-            temp = temp % fromInteger(valueOf(PerceptronCount));
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) != 0) begin
+            Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) index = zeroExtend(folded);
+            index = index % fromInteger(valueOf(PerceptronCount));
+
+            folded = truncate(index);
         end
 
         // Return the final index
@@ -116,21 +174,97 @@ module mkHybridMod(HashFunction);
     endmethod
 endmodule
 
-module mkHybridDrop(HashFunction);
+
+module mkHybridMod1(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) folded = 0;
+        UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth) + 1) begin
+            Bit#(TAdd#(PerceptronsRegIndexWidth, 1)) chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        PerceptronsRegIndex index;
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) == 0) begin
+            index = truncate(folded);
+        end else begin
+            // Try doing the expensive thing... MOD(valueOf(PerceptronCount))
+            folded = folded % fromInteger(valueOf(PerceptronCount));
+            index = truncate(folded);
+        end
+
+        // Return the final index
+        return index;
+    endmethod
+endmodule
+
+module mkHybridMod2(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        Bit#(TAdd#(PerceptronsRegIndexWidth, 2)) folded = 0;
+        UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth) + 2) begin
+            Bit#(TAdd#(PerceptronsRegIndexWidth, 2)) chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        PerceptronsRegIndex index;
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) == 0) begin
+            index = truncate(folded);
+        end else begin
+            folded = folded % fromInteger(valueOf(PerceptronCount));
+            index = truncate(folded);
+        end
+
+        // Return the final index
+        return index;
+    endmethod
+endmodule
+
+module mkHybridMod3(HashFunction#(PerceptronsRegIndex));
+    method PerceptronsRegIndex getIndex(Addr pc);
+        Bit#(TAdd#(PerceptronsRegIndexWidth, 3)) folded = 0;
+        UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth) + 3) begin
+            Bit#(TAdd#(PerceptronsRegIndexWidth, 3)) chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
+
+        PerceptronsRegIndex index;
+        // If a power of two, just truncate to size
+        if ((count & (count - 1)) == 0) begin
+            index = truncate(folded);
+        end else begin
+            folded = folded % fromInteger(valueOf(PerceptronCount));
+            index = truncate(folded);
+        end
+
+        // Return the final index
+        return index;
+    endmethod
+endmodule
+
+module mkHybridDrop(HashFunction#(PerceptronsRegIndex));
     method PerceptronsRegIndex getIndex(Addr pc);
         PerceptronsRegIndex folded = 0;
         UInt#(TAdd#(PerceptronsRegIndexWidth, 1)) count = fromInteger(valueOf(PerceptronCount));
+        
+        // Break PC into chunks of size PerceptronsRegIndexWidth
+        for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
+            PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
+            folded = folded ^ chunk;       // XOR fold it in
+        end
 
-        // If a power of two, just truncate to size
-        if ((count & (count - 1)) == 0) begin
-            folded = truncate(pc >> 1); 
-        end else begin
-            // Break PC into chunks of size PerceptronsRegIndexWidth
-            for (Integer i = 0; i < valueOf(AddrWidth); i = i + valueOf(PerceptronsRegIndexWidth)) begin
-                PerceptronsRegIndex chunk = truncate(pc >> i); // get chunk of appropriate size
-                folded = folded ^ chunk;       // XOR fold it in
-            end
-
+        // If a power of two, just return
+        // Otherwise:
+        if ((count & (count - 1)) != 0) begin
             // If out of range, drop MSB
             if (folded > fromInteger(valueOf(PerceptronCount) - 1)) begin
                 folded = (truncate(folded << 1) >> 1);
@@ -145,16 +279,15 @@ endmodule
 
 (* synthesize *)
 module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
-    HashFunction hash <- mkHybridDrop;
+    HashFunction#(PerceptronsRegIndex) hash <- mkHybridMod3;
     PerceptronHistorian ph <- mkPerceptronHistorianShift;
     RegFile#(PerceptronsRegIndex, PerceptronHistory) histories <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1));
     PerceptronGHistReg global_history <- mkGlobalBrHistReg;
     RegFile#(PerceptronsRegIndex, PerceptronWeights) weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1)); 
     RegFile#(PerceptronsRegIndex, PerceptronGWeights) global_weights <- mkRegFileWCF(0,fromInteger(valueOf(PerceptronCount)-1)); 
-    // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     
     Reg#(Addr) pc_reg <- mkRegU;
-    Reg#(TrainCount) trainCount <- mkReg(0); // TODO (RW): Choose a proper type for this that can't be too small for PerceptronEntries
+    // TODO (RW): Decide max weight size and prevent overflow. 8 suggested in paper.
     
     // EHR to record predict results in this cycle
     Ehr#(TAdd#(1, SupSize), Bit#(TLog#(TAdd#(SupSize, 1)))) predCnt <- mkEhr(0);
@@ -167,6 +300,9 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         
     rule initHistory(resetHist);
         if (nextInit <= fromInteger(valueOf(PerceptronCount) - 1)) begin
+            // $display("BSV Perceptron Init: Uninitialised local history: %b", histories.sub(nextInit));
+            // let weight = weights.sub(nextInit)[0];
+            // $display("BSV Perceptron Init: Uninitialised local weights: %d", weight);
             histories.upd(nextInit, ph.initHist());
             weights.upd(nextInit, zeroWeights); // TODO (RW): Consider what happens at start when history is full of Falses.
             global_weights.upd(nextInit, zeroGWeights);
@@ -177,8 +313,6 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         end
 
         nextInit <= (nextInit == fromInteger(valueOf(PerceptronCount) - 1)) ? 0 : nextInit + 1;
-
-        // TODO (RW): Should global (history) be done in a separate rule? - just initialise when made. Is it even done atm?
     endrule
 
     function PerceptronsRegIndex getIndex(Addr pc);
@@ -186,18 +320,19 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     endfunction
 
     // Function to compute the perceptron output
-    function Bool computePerceptronOutput(PerceptronWeights weight, PerceptronHistory history, PerceptronGWeights glob_weight, PerceptronGHistReg global_hist); // TODO (RW): Can make actionvalue for debug prints. Set back after for performance.
+    function Int#(16) computePerceptronOutput(PerceptronWeights weight, PerceptronHistory history, PerceptronGWeights glob_weight, PerceptronGHistReg global_hist);
         let gHist = global_hist.history; // Bit#(...)
 
+        // TODO (RW): Dynamically choose a type based on the size of the weights, and so the max value
         Int#(16) sum = extend(weight[0]); // Bias
-        for (Integer i = 1; i <= valueOf(PerceptronEntries); i = i + 1) begin // TODO (RW): check loop boundary
+        for (Integer i = 1; i <= valueOf(PerceptronEntries); i = i + 1) begin
             sum = boundedPlus(sum, (history[i-1] ? extend(weight[i]) : extend(-weight[i]))); // Think about hardware this implies. - log (128) = 9 deep?
         end
-        for (Integer i = 0; i < valueOf(PerceptronGHistEntries); i = i + 1) begin // TODO (RW): check loop boundary
-            // TODO (RW): Don't need to misalign for ghist as not using a global bias
+        for (Integer i = 0; i < valueOf(PerceptronGHistEntries); i = i + 1) begin
+            // TODO (RW): Should I be using a global bias?
             sum = boundedPlus(sum, ((gHist[i] == 1) ? extend(glob_weight[i]) : extend(-glob_weight[i])));
         end
-        return sum >= 0;
+        return sum;
     endfunction
 
     PerceptronGHist curGHist = global_history.history; // global history: MSB is the latest branch
@@ -218,8 +353,10 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
                 // In pred, most recent is correct
                 PerceptronGHist globHist = global_history.history;                
 
-                Bool taken = computePerceptronOutput(weights.sub(index), histories.sub(index), global_weights.sub(index), global_history); // TODO (RW): Work out how to pass
-                // TODO (RW): Need to know how to flush global_history on mispred? Check other predictors that use global (GSelect).
+                let sum = computePerceptronOutput(weights.sub(index), histories.sub(index), global_weights.sub(index), global_history);
+
+                Bool taken = (sum >= 0);
+                Bool forceTrain = (abs(sum) < fromInteger(trunc((1.93 * (fromInteger(valueOf(PerceptronEntries)))) + 14)));
 
                 // $display("BSV Perceptron Pred %d: Taken: %d", index, taken);
 
@@ -233,7 +370,8 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
                     taken: taken,
                     train: PerceptronTrainInfo {
                         gHist: globHist,
-                        index: index
+                        index: index,
+                        train: forceTrain
                     }
                 };
             endactionvalue;
@@ -255,14 +393,19 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
     
     method Action update(Bool taken, PerceptronTrainInfo train, Bool mispred) if (!resetHist); 
         let index = train.index; // already hashed
-        
+        let forceTrain = train.train;
+
         // update history if mispred
+        // TODO (RW): Does this work for cases where two predictions have been made in the same cycle?
+        // How to resolve - passing index? 
+        // TODO (RW): Does this also cause issues where update is called much later? This would be harder to fix...
         if (mispred) begin
             PerceptronGHist newHist = truncate({pack(taken), train.gHist} >> 1);
             global_history.redirect(newHist);
         end 
     
-        // TODO (RW): Only train if below training threshold. Paper says threshold = 1.93 * branch history + 14. This could be a power optimisation. Test with and without, measure impact.
+        // Paper says threshold = 1.93 * branch history + 14. 
+        // TODO (RW): Measure with and without?
         
         
         let local_hist = histories.sub(index);
@@ -270,15 +413,15 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
         PerceptronGWeights g_weights = global_weights.sub(index);
         
         // Train bias
+        // TODO (RW): Should this be guarded behind the training threshold?
         local_weights[0] = boundedPlus(local_weights[0], ((taken) ? 1 : -1));
-        // TODO (RW): Why isn't this updating (sits at 0)
+        // TODO (RW): Why isn't this updating (sits at 0) (check!)
 
         // Train local and global weights
         
         // Bool localCorrelationPos, globCorrelationPos;
         // Int#(8) localInc, globInc;
-        if (mispred || (trainCount < fromInteger(trunc((1.93 * (fromInteger(valueOf(PerceptronEntries)))) + 14)))) begin
-            // $display("BSV Perceptron Update: Training count %d, Mispred? %b", trainCount, mispred);
+        if (mispred || forceTrain) begin
             // $display("BSV Perceptron Update: Local Hist %d: %b", index, local_hist);
             for (Integer i = 1; i <= valueOf(PerceptronEntries); i = i + 1) begin 
                 // Paper's update
@@ -308,13 +451,10 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
                 // end
                 // $display("BSV Perceptron Update Global Weights Post Update %d: %d", i, g_weights[i]); 
             end
-
         
             // Update weights!
             global_weights.upd(index, g_weights);
-            trainCount <= boundedPlus(trainCount, 1);
-
-        end // (training)
+        end
         
         weights.upd(index, local_weights);
         
@@ -330,7 +470,15 @@ module mkPerceptron(DirPredictor#(PerceptronTrainInfo));
 
 
     // Perceptron predictor also doesn't need to be flushed
-    method flush = noAction;
-    method flush_done = True;
+    method Action flush if (!resetHist);
+        // Local hist, weights, gweights handled by resetHist
+        resetHist <= True;
+        // GHist
+        PerceptronGHist empty = 0;
+        global_history.redirect(empty);
+    endmethod
+
+    // Not sure if this is some special method meaning `readable', or if it is just a normal read. Test with UTs!
+    method flush_done = !resetHist._read;
 endmodule
 
