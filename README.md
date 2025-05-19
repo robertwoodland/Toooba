@@ -5,6 +5,8 @@ Please note, building Toooba is not required to test the perceptron predictor wi
 The `builds/RV64ACDFIMSU_Toooba_bluesim/Mem.hex` file contains CoreMark.
 Building Toooba with `make all` and running the executable simulates CoreMark on Toooba.
 
+The predictor under test is chosen using the `define` in `src_Core/RISCY_OOO/procs/RV64G_OOO/ProcConfig.bsv`, which is currently set to perceptron.
+
 Once it has produced the line beginning `instret:188799`, it has finished and can be terminated - otherwise it will loop.
 The number of processor cycles it took can be seen at the end of this same line.
 
