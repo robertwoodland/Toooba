@@ -1,5 +1,7 @@
 # Part II Project
 
+Please note, building Toooba is not required to test the perceptron predictor with ChampSim.
+
 The `builds/RV64ACDFIMSU_Toooba_bluesim/Mem.hex` file contains CoreMark.
 Building Toooba with `make all` and running the executable simulates CoreMark on Toooba.
 
