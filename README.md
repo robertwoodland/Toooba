@@ -1,3 +1,11 @@
+# Part II Project
+
+The `builds/RV64ACDFIMSU_Toooba_bluesim/Mem.hex` file contains CoreMark.
+Building Toooba with `make all` and running the executable simulates CoreMark on Toooba.
+
+Once it has produced the line beginning `instret:188799`, it has finished and can be terminated - otherwise it will loop.
+The number of processor cycles it took can be seen at the end of this same line.
+
 # Open-source RISC-V CPUs from Bluespec, Inc.
 
 This is one of a family of free, open-source RISC-V CPUs created by Bluespec, Inc.
