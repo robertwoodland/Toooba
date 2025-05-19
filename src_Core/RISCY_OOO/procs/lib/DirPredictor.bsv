@@ -32,7 +32,7 @@ import Bht::*;
 import GSelectPred::*;
 import GSharePred::*;
 import TourPred::*;
-import TourPredSecure::*;
+// import TourPredSecure::*;
 import Perceptron::*;
 
 export DirPredTrainInfo(..);
